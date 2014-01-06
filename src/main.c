@@ -10,11 +10,13 @@
 #include <netdb.h>
 
 #include "group_list.h"
+#include "server_protocol.h"
 
 #define MYPORT "5000"    
 
-#define MAXBUFLEN 1200                  // Max message size
 
+/* PROTOTYPES */
+int handle_request( char* msg , struct sockaddr_in *addr , socklen_t addr_len , GROUP_LIST* groups);
 
 
 // get sockaddr, IPv4 or IPv6:
@@ -40,8 +42,7 @@ int main(void)
     socklen_t addr_len;
     char s[INET6_ADDRSTRLEN];
 
-    short msg_len;
-    char msg_type;
+
 
     GROUP_LIST* groups = NULL;
 
@@ -100,14 +101,9 @@ int main(void)
             perror("recvfrom");
         
         }
-
-        /* Read size and message type */
-
-
-
-
         /* Handle Request */
-
+        if( !handle_request(buf , (struct sockaddr_in *)&their_addr, addr_len , groups) )
+            continue;
 
 
 
@@ -129,4 +125,44 @@ int main(void)
     close(sockfd);
 
     return 0;
+}
+
+
+
+
+
+/**
+ * Handle request and set reply in msg
+ *
+ * Return: 1 on success
+ *         0 on failure
+ */
+int handle_request( char* msg , struct sockaddr_in *addr , socklen_t addr_len , GROUP_LIST* groups){
+
+    unsigned short msg_len;
+    char msg_type;
+    
+
+    /* Read size and message type */
+    memcpy(&msg_len , msg ,MSGSIZELEN);
+    msg_len = ntohs(msg_len);
+    msg_type = msg[2];          
+
+    if( SEARCH_REQUEST == msg_type ){
+        /* search request */
+        
+
+    }
+    else if( ADD_REQUEST == msg_type ){
+        /* add the user to a group list */
+
+
+    }
+    else{
+        /* Protocol doesn't define a diffrent type of message */
+        return 0;
+    }
+
+
+    return 1;
 }
