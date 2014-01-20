@@ -155,3 +155,23 @@ int add_group( GROUP_LIST* list , GROUP_T* group){
 	}
 	return 1;
 }
+
+/**
+ * Function that searches groups by name and returns a list of members
+ *
+ * Returns: pointer to list of the requested group
+ *			NULL when no such group exists
+ */
+MEMBER_LIST* get_members_from_group( GROUP_LIST* group_list , char* g_name){
+
+	GROUP_T* curr;	
+
+	if( !g_name || !group_list || group_list->n < 1 )
+		return NULL;	
+
+	for ( curr = group_list->head ; curr ; curr = curr->next)
+		if( !strcmp( g_name , curr->group_name) )
+			return curr->members;
+	
+	return NULL;
+}

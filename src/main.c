@@ -17,6 +17,7 @@
 
 /* PROTOTYPES */
 int handle_request( char* msg , struct sockaddr_in *addr , socklen_t addr_len , GROUP_LIST* groups);
+static void fill_search_request(GROUP_LIST* group,char* buffer , char* group_name , int name_len);
 
 
 // get sockaddr, IPv4 or IPv6:
@@ -150,7 +151,7 @@ int handle_request( char* msg , struct sockaddr_in *addr , socklen_t addr_len , 
 
     if( SEARCH_REQUEST == msg_type ){
         /* search request */
-        
+        fill_search_request( groups, msg , msg + sizeof(unsigned short) + sizeof(char) , msg_len);        
 
     }
     else if( ADD_REQUEST == msg_type ){
@@ -165,4 +166,55 @@ int handle_request( char* msg , struct sockaddr_in *addr , socklen_t addr_len , 
 
 
     return 1;
+}
+
+
+static void fill_search_request(GROUP_LIST* groups , char* buffer , char* group_name , int name_len){
+
+    MEMBER_LIST* members = NULL;
+
+    members = get_members_from_group( groups , group_name);
+    if(!members || members->n < 1){
+        // no members or group not found
+        buffer[0] = 0;
+        buffer[1] = 0;
+        buffer[2] = SEARCH_REPLY;
+    }
+    else {
+        // members found
+        int i;
+        int howmany_pairs;
+        //int pair_offset;
+        unsigned short port_num;
+
+        unsigned short numpairs    = MAXBUFLEN / ( sizeof(unsigned short) + INET_ADDRSTRLEN ); 
+        unsigned short pairs_avail = members->n;
+        if( numpairs > pairs_avail ){
+            howmany_pairs = pairs_avail;
+            pairs_avail = htons(pairs_avail);
+            memcpy(buffer, &pairs_avail, sizeof(unsigned short));
+        }
+        else{
+            howmany_pairs = numpairs;
+            numpairs = htons(numpairs);
+            memcpy(buffer, &numpairs, sizeof(unsigned short));
+        }
+        buffer[2] = SEARCH_REPLY; 
+
+        buffer += 3;     // skip the packet header
+        MEMBER_T* curr = members->head;
+        //pair_offset = INET_ADDRSTRLEN + sizeof( unsigned short);
+        for( i = 0; i < howmany_pairs; i++){
+            port_num = ntohs(curr->port);
+
+            memcpy(buffer, curr->ip , INET_ADDRSTRLEN);
+            buffer += INET_ADDRSTRLEN;
+            
+            memcpy(buffer, &port_num , sizeof(unsigned short));
+            buffer += sizeof(unsigned short); 
+            // alternative
+            //memcpy( buffer + (i*pair_offset), curr->ip , INET_ADDRSTRLEN);
+            //memcpy( buffer + (i*pair_offset + INET_ADDRSTRLEN), &port_num , sizeof(unsigned short)); 
+        }
+    }
 }

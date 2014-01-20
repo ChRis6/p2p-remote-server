@@ -9,7 +9,7 @@ typedef struct member {
 	
 	/* IP address */
 	char ip[INET_ADDRSTRLEN];
-	/* port number */
+	/* port number in host byte order */
 	short port;
 
 	struct member* next;
@@ -112,4 +112,12 @@ GROUP_T* create_group(char* name , MEMBER_LIST* member_list);
  *			2 when failed
  */
 int add_group( GROUP_LIST* list , GROUP_T* group);
+
+/**
+ * Function that searches groups by name and returns a list of members
+ *
+ * Returns: pointer to list of the requested group
+ *			NULL when no such group exists
+ */
+MEMBER_LIST* get_members_from_group( GROUP_LIST* group_list , char* g_name);
 #endif
