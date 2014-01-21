@@ -306,5 +306,6 @@ static void handle_add_request( GROUP_LIST* groups, char* msg, char* ip , unsign
         msg[2] = ADD_REPLY_POSITIVE;
     }
 
+    free(group_name);
     return ;
 }
