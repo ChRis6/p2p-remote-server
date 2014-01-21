@@ -17,7 +17,8 @@
 
 /* PROTOTYPES */
 int handle_request( char* msg , struct sockaddr_in *addr , socklen_t addr_len , GROUP_LIST* groups);
-static void fill_search_request(GROUP_LIST* group,char* buffer , char* group_name , int name_len);
+static void handle_search_request(GROUP_LIST* group,char* buffer , char* group_name , int name_len);
+static void handle_add_request( GROUP_LIST* groups, char* msg, char* ip , unsigned short port_number);
 
 
 // get sockaddr, IPv4 or IPv6:
@@ -95,7 +96,6 @@ int main(void)
     /* MAIN LOOP */
     while (1){
 
-
         /* Receive message */
         if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN-1 , 0,
             (struct sockaddr *)&their_addr, &addr_len)) == -1) {
@@ -107,21 +107,9 @@ int main(void)
             continue;
 
 
-
         /* Reply */
+        sendto(sockfd, buf, MAXBUFLEN-1, 0, (struct sockaddr*)&their_addr, addr_len );
     }
-
-
-/*
-    printf("listener: got packet from %s\n",
-        inet_ntop(their_addr.ss_family,
-            get_in_addr((struct sockaddr *)&their_addr),
-            s, sizeof s));
-*/
-
-    printf("listener: packet is %d bytes long\n", numbytes);
-    buf[numbytes] = '\0';
-    printf("listener: packet contains \"%s\"\n", buf);
 
     close(sockfd);
 
@@ -151,11 +139,22 @@ int handle_request( char* msg , struct sockaddr_in *addr , socklen_t addr_len , 
 
     if( SEARCH_REQUEST == msg_type ){
         /* search request */
-        fill_search_request( groups, msg , msg + sizeof(unsigned short) + sizeof(char) , msg_len);        
+        handle_search_request( groups, msg , msg + sizeof(unsigned short) + sizeof(char) , msg_len);        
 
     }
     else if( ADD_REQUEST == msg_type ){
         /* add the user to a group list */
+        char ip[INET_ADDRSTRLEN];
+        unsigned short port_number;
+
+
+        // get port number
+        port_number = ntohs( addr->sin_port);
+        // get ip address
+        if( inet_ntop(addr->sin_family,&(addr->sin_addr),ip, sizeof(ip) ) == NULL)
+            return 0;   // don't handle bad ip requests
+
+        handle_add_request( groups, msg, ip , port_number);
 
 
     }
@@ -169,7 +168,7 @@ int handle_request( char* msg , struct sockaddr_in *addr , socklen_t addr_len , 
 }
 
 
-static void fill_search_request(GROUP_LIST* groups , char* buffer , char* group_name , int name_len){
+static void handle_search_request(GROUP_LIST* groups , char* buffer , char* group_name , int name_len){
 
     MEMBER_LIST* members = NULL;
 
@@ -217,4 +216,95 @@ static void fill_search_request(GROUP_LIST* groups , char* buffer , char* group_
             //memcpy( buffer + (i*pair_offset + INET_ADDRSTRLEN), &port_num , sizeof(unsigned short)); 
         }
     }
+}
+
+static void handle_add_request( GROUP_LIST* groups, char* msg, char* ip , unsigned short port_number){
+
+    unsigned short len;
+    int packet_header_offset;
+    char* group_name;
+    GROUP_T *group;
+    GROUP_T* new_group;
+    MEMBER_T* new_member;
+
+    packet_header_offset = sizeof(unsigned short) + sizeof(char);
+
+    memcpy(&len, msg, sizeof(unsigned short));
+    len = ntohs(len);
+    
+    group_name = (char*) malloc( sizeof(char) * (len + 1));     // len + 1 bytes including the '\0' 
+    if(!group_name){
+        /*
+         *  Server is out of memory.Send a negative reply.We only need to change
+         *  the \type field of the packet's header
+         */
+        msg[2] = ADD_REPLY_NEGATIVE;
+        return ;
+    }
+
+    // copy group name from the packet
+    strncpy( group_name, msg + packet_header_offset, len );
+    group_name[len] = '\0';
+
+    new_member = create_member(ip , port_number);
+    if( !new_member){
+        // not enough memory
+        free(group_name);
+        msg[2] = ADD_REPLY_NEGATIVE;
+        return;
+    }
+
+    group = get_group_by_name(groups, group_name);
+    if(!group){
+
+        /*
+         * No such group.First create a new members list and add the new member to the 
+         * list.Then create a new group and add it to the groups' list
+         */
+        int flag;
+
+        MEMBER_LIST* member_list = create_member_list();
+        if( !member_list){
+            free(group_name);
+            free(new_member);
+
+            msg[2] = ADD_REPLY_NEGATIVE;
+            return ;
+        }
+        // add member to the list
+        flag = add_member(member_list,new_member);
+        if( !flag){  
+            // not added
+            free(member_list);
+            free(new_member);
+            free(group_name);
+            msg[2] = ADD_REPLY_NEGATIVE;
+            return ;
+        }
+        // now create a new group and add it to the groups list
+        new_group = create_group( group_name, member_list);
+        if( !new_group){
+
+            free(new_member);
+            free(member_list);
+            free(group_name);
+
+            msg[2] = ADD_REPLY_NEGATIVE;
+            return;
+        }
+
+        // add it to the groups' list
+        add_group(groups, new_group);
+        msg[2] = ADD_REPLY_POSITIVE;
+        return;
+    }
+    else{
+        // group is found.Add the member to the group
+        
+        add_member( group->members, new_member);
+        // positive reply
+        msg[2] = ADD_REPLY_POSITIVE;
+    }
+
+    return ;
 }

@@ -175,3 +175,20 @@ MEMBER_LIST* get_members_from_group( GROUP_LIST* group_list , char* g_name){
 	
 	return NULL;
 }
+
+/**
+ * Search group by name
+ * 
+ * Returns: pointer to the group specified
+ *          NULL when the group is not found
+ */
+GROUP_T* get_group_by_name( GROUP_LIST* group_list, char* g_name){
+	GROUP_T* current;
+
+	for( current = group_list->head ; current ; current = current->next){
+		if(!strcmp(g_name,current->group_name))
+			return current;
+	}
+
+	return NULL;
+}
